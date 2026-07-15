@@ -61,9 +61,10 @@
   .q{ font-size:52px; letter-spacing:2px; }
   .qeq{ font-size:40px; color:#b7aede; }
   .ans-grid{ display:grid; grid-template-columns:repeat(2,1fr); gap:14px; }
-  .ans{ border:none; border-radius:22px; padding:26px 0; font-family:inherit; font-size:40px; color:#fff; cursor:pointer; transition:transform .08s; }
+  .ans{ border:none; border-radius:22px; padding:26px 0; font-family:inherit; font-size:46px; color:#fff; cursor:pointer; transition:transform .08s; text-shadow:0 2px 5px rgba(0,0,0,.30); }
   .ans:active{ transform:scale(.95); }
-  .ans.dead{ background:#CFC9DE !important; color:#fff; }
+  .ans.grape{ background:var(--grape); } .ans.coral{ background:var(--coral); } .ans.mint{ background:#12B39A; } .ans.sky{ background:#2AA8E8; }
+  .ans.dead{ background:#CFC9DE !important; color:#fff; text-shadow:none; }
   .ans.win{ animation:pop .35s; }
   @keyframes pop{ 0%{transform:scale(1);} 50%{transform:scale(1.15);} 100%{transform:scale(1);} }
   .shake{ animation:shake .3s; }
