@@ -106,6 +106,21 @@
   .log-row .ln{ flex:1; }
   .log-row .lt{ color:var(--grape); }
   .log-row .ld{ color:#a99fc7; font-size:13px; min-width:46px; text-align:right; }
+  .seg button{ line-height:1.15; }
+  .sticker-reward{ margin:14px 0 4px; }
+  .sticker-reward .sr-txt{ font-size:18px; color:var(--grape); margin-top:4px; }
+  .dex-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+  .dex-cell{ position:relative; background:#fff; border-radius:14px; padding:6px 0; text-align:center; line-height:0; }
+  .dex-cell.locked svg{ filter:grayscale(1); opacity:.22; }
+  .dex-n{ position:absolute; right:4px; bottom:3px; background:var(--grape); color:#fff; font-size:11px; line-height:1; padding:2px 5px; border-radius:9px; }
+  .dex-cell .spark{ position:absolute; top:-2px; left:3px; font-size:14px; }
+  .dex-cell.shiny{ box-shadow:0 0 0 2px #FFD34D inset; }
+  .dex-cell.gold{ background:#FFF7E0; }
+  .shiny{ position:relative; display:inline-block; }
+  .shiny .spark{ position:absolute; top:-6px; right:-6px; font-size:20px; }
+  .sticker-reward .shiny{ animation:shinyGlow 1s ease-in-out infinite; }
+  .sticker-reward.gold .sr-txt{ color:#E08A00; }
+  @keyframes shinyGlow{ 0%,100%{ filter:drop-shadow(0 0 4px rgba(255,200,0,.7)); } 50%{ filter:drop-shadow(0 0 11px rgba(255,210,0,1)); } }
 </style>
 
 <div id="app">
@@ -147,11 +162,17 @@
   <!-- SETUP -->
   <div class="screen" id="s-setup">
     <div class="card">
-      <div class="who" id="setupWho" style="justify-content:center; margin-bottom:6px;"></div>
-      <h2>몇 문제 풀까?</h2>
-      <button class="btn mint" onclick="startGame(5)">5문제 <span style="font-size:16px;">· 금방</span></button>
-      <button class="btn sky" onclick="startGame(10)">10문제 <span style="font-size:16px;">· 보통</span></button>
-      <button class="btn grape" onclick="startGame(20)">20문제 <span style="font-size:16px;">· 도전</span></button>
+      <div class="who" id="setupWho" style="justify-content:center; margin-bottom:10px;"></div>
+      <h2>난이도</h2>
+      <div class="seg" id="diffSeg">
+        <button data-d="1" onclick="setDiff(1)">쉬움<br><span style="font-size:12px;">한자리</span></button>
+        <button data-d="2" onclick="setDiff(2)">보통<br><span style="font-size:12px;">섞기</span></button>
+        <button data-d="3" onclick="setDiff(3)">어려움<br><span style="font-size:12px;">두자리</span></button>
+      </div>
+      <h2>몇 초 동안 풀까?</h2>
+      <button class="btn mint" onclick="startGame(20)">20초 <span style="font-size:16px;">· 짧게</span></button>
+      <button class="btn sky" onclick="startGame(40)">40초 <span style="font-size:16px;">· 보통</span></button>
+      <button class="btn grape" onclick="startGame(60)">60초 <span style="font-size:16px;">· 길게</span></button>
       <button class="btn ghost" onclick="go('profile')">← 뒤로</button>
     </div>
   </div>
@@ -172,9 +193,10 @@
     <div class="card">
       <div class="hud">
         <div class="who" id="gameWho"></div>
-        <div class="timer" id="timer">0.0초</div>
+        <div class="timer" id="timer">20초</div>
       </div>
       <div class="progress"><div id="progBar"></div></div>
+      <div id="scoreLine" style="text-align:center; font-size:22px; margin:-4px 0 14px; color:var(--grape);">⭐ <span id="scoreVal">0</span>개</div>
       <div class="qwrap">
         <div class="q" id="qText">3 + 5</div>
         <div class="qeq">= ?</div>
@@ -187,10 +209,11 @@
   <div class="screen" id="s-result">
     <div class="card">
       <div class="big-emoji" id="resEmoji">🦖</div>
-      <h2>다 풀었어! 🎉</h2>
+      <h2>시간 끝! 🎉</h2>
       <div id="recordBanner"></div>
-      <div class="time-big" id="resTime">0.0초</div>
+      <div class="time-big" id="resTime">0개</div>
       <div class="compare" id="resCompare"></div>
+      <div id="stickerReward"></div>
       <button class="btn grape" onclick="go('setup')">다시 하기</button>
       <button class="btn ghost" onclick="renderRecords()">기록 보기</button>
       <button class="btn ghost" onclick="go('home')">홈으로</button>
@@ -203,15 +226,17 @@
       <h2>기록</h2>
       <div class="sec-h">🏆 랭킹</div>
       <div class="seg" id="rankSeg">
-        <button data-n="5" onclick="setRank(5)">5문제</button>
-        <button data-n="10" class="on" onclick="setRank(10)">10문제</button>
-        <button data-n="20" onclick="setRank(20)">20문제</button>
+        <button data-n="20" onclick="setRank(20)">20초</button>
+        <button data-n="40" class="on" onclick="setRank(40)">40초</button>
+        <button data-n="60" onclick="setRank(60)">60초</button>
       </div>
       <div id="rankBox"></div>
       <div class="sec-h">⭐ 각자 최고 기록</div>
       <div id="bestBox"></div>
       <div class="sec-h">📜 지나온 기록</div>
       <div id="logBox" style="max-height:280px; overflow:auto;"></div>
+      <div class="sec-h">🎁 몬스터 도감</div>
+      <div id="dexBox"></div>
       <button class="btn ghost" onclick="go('home')" style="margin-top:16px;">← 뒤로</button>
     </div>
   </div>
@@ -242,8 +267,18 @@ function monster(i,size){
     +'</svg>';
 }
 function charHTML(val,size){ return (typeof val==='number') ? monster(val,size) : '<span style="font-size:'+Math.round(size*0.8)+'px">'+val+'</span>'; }
-const PENALTY = 5; // 틀리면 +5초
-let state = { profiles:[], profile:null, pickChar:0, n:10, qs:[], idx:0, start:0, penalty:0, raf:0, muted:false };
+function goldMonster(size){
+  return '<svg viewBox="0 0 100 100" width="'+size+'" height="'+size+'" style="display:inline-block;vertical-align:middle">'
+    +'<polygon points="28,26 22,6 38,20 50,4 62,20 78,6 72,26" fill="#FFD34D"/>'
+    +'<ellipse cx="50" cy="58" rx="34" ry="33" fill="#F6B301"/>'
+    +'<ellipse cx="39" cy="54" rx="7" ry="8.5" fill="#fff"/><circle cx="40" cy="56" r="3.6" fill="#5a3d00"/>'
+    +'<ellipse cx="61" cy="54" rx="7" ry="8.5" fill="#fff"/><circle cx="62" cy="56" r="3.6" fill="#5a3d00"/>'
+    +'<path d="M42 72 q8 7 16 0" stroke="#5a3d00" stroke-width="3" fill="none" stroke-linecap="round"/>'
+    +'<ellipse cx="30" cy="64" rx="5" ry="3" fill="#ff9db0" opacity=".5"/><ellipse cx="70" cy="64" rx="5" ry="3" fill="#ff9db0" opacity=".5"/>'
+    +'</svg>';
+}
+const PENALTY = 3; // 틀리면 -3초
+let state = { profiles:[], profile:null, pickChar:0, limit:40, difficulty:2, locked:false, score:0, cur:null, penalty:0, start:0, raf:0, ended:false, muted:false };
 
 /* ---------- storage (persists across sessions; falls back to memory) ---------- */
 const mem = {};
@@ -259,7 +294,7 @@ async function sSet(k,v){
   if(hasStore){ try{ await window.storage.set(k, JSON.stringify(v)); return; }catch(e){} }
   if(hasLS){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
 }
-const RECKEY = id => 'p99:rec:'+id;
+const RECKEY = id => 'p99s:rec:'+id;
 
 /* ---------- navigation ---------- */
 function go(id){
@@ -324,46 +359,62 @@ async function createProfile(){
 }
 function renderSetupWho(){
   const p=state.profile; if(!p) return;
+  if(p.diff==null) p.diff=2;
   document.getElementById('setupWho').innerHTML='<span class="e">'+charHTML(p.char,36)+'</span><span>'+p.name+'</span>';
+  document.querySelectorAll('#diffSeg button').forEach(b=>b.classList.toggle('on', Number(b.dataset.d)===p.diff));
+}
+async function setDiff(d){
+  if(!state.profile) return;
+  state.profile.diff=d;
+  await sSet('p99:profiles', state.profiles);
+  document.querySelectorAll('#diffSeg button').forEach(b=>b.classList.toggle('on', Number(b.dataset.d)===d));
 }
 
 /* ---------- questions ---------- */
 function rand(a,b){ return Math.floor(Math.random()*(b-a+1))+a; }
-function makeQuestion(){
-  const two = Math.random()<0.5;
+function makeQuestion(level){
+  level = level||2;
   let a,b;
-  if(two){ a=rand(10,90); b=rand(1,9); } else { a=rand(1,9); b=rand(1,9); }
+  if(level===1){                      // 쉬움: 한자리+한자리
+    a=rand(1,9); b=rand(1,9);
+  } else if(level===3){               // 어려움: 두자리+한자리 위주 (합 99 이하)
+    if(Math.random()<0.8){ a=rand(20,90); b=rand(1,9); } else { a=rand(10,40); b=rand(1,9); }
+  } else {                            // 보통: 섞기
+    if(Math.random()<0.5){ a=rand(10,90); b=rand(1,9); } else { a=rand(1,9); b=rand(1,9); }
+  }
   const ans=a+b;
   const opts=new Set([ans]);
   let guard=0;
-  while(opts.size<4 && guard++<50){ let d=ans+rand(-9,9); if(d<0) d=Math.abs(d); if(d!==ans) opts.add(d); }
-  while(opts.size<4){ opts.add(ans+opts.size); }
+  while(opts.size<4 && guard++<60){ let off=rand(1,5)*(Math.random()<0.5?-1:1); let d=ans+off; if(d<0) d=Math.abs(d)+1; if(d!==ans) opts.add(d); }
+  while(opts.size<4){ opts.add(ans+opts.size+1); }
   const choices=[...opts];
   for(let i=choices.length-1;i>0;i--){ const j=rand(0,i); [choices[i],choices[j]]=[choices[j],choices[i]]; }
   return {a,b,ans,choices};
 }
 
 /* ---------- game ---------- */
-function startGame(n){
-  state.n=n; state.idx=0; state.penalty=0;
-  state.qs=Array.from({length:n},makeQuestion);
+function startGame(sec){
+  state.limit=sec; state.score=0; state.penalty=0; state.ended=false;
+  state.difficulty=(state.profile&&state.profile.diff)||2;
   const p=state.profile;
   document.getElementById('readyMon').innerHTML=charHTML(p.char,84);
   document.getElementById('readyName').textContent=p.name;
-  document.getElementById('readyCount').textContent=n+'문제 · 준비됐어?';
+  document.getElementById('readyCount').textContent=sec+'초 · 준비됐어?';
   go('ready');
 }
 function beginGame(){
   const p=state.profile;
+  state.score=0; state.penalty=0; state.ended=false;
   document.getElementById('gameWho').innerHTML='<span class="e">'+charHTML(p.char,32)+'</span><span>'+p.name+'</span>';
-  document.getElementById('timer').textContent='0.0초';
+  document.getElementById('timer').textContent=state.limit.toFixed(1)+'초';
+  document.getElementById('scoreVal').textContent='0';
   document.getElementById('qText').textContent='';
   document.getElementById('ansGrid').innerHTML='';
-  document.getElementById('progBar').style.width='0%';
+  document.getElementById('progBar').style.width='100%';
   go('game');
   countdown(()=>{
-    showQuestion();
     state.start=performance.now();
+    showQuestion();
     loopTimer();
     startMusic();
   });
@@ -385,15 +436,26 @@ function countdown(done){
   })();
 }
 function loopTimer(){
-  const el=(performance.now()-state.start)/1000 + state.penalty;
-  document.getElementById('timer').textContent=el.toFixed(1)+'초';
+  if(state.ended) return;
+  const elapsed=(performance.now()-state.start)/1000;
+  const remaining=state.limit - state.penalty - elapsed;
+  const disp=Math.max(0,remaining);
+  const timerEl=document.getElementById('timer');
+  timerEl.textContent=disp.toFixed(1)+'초';
+  const r=disp/state.limit;
+  const bar=document.getElementById('progBar');
+  bar.style.width=Math.max(0,Math.min(100,r*100))+'%';
+  bar.style.background = r>0.5 ? 'var(--mint)' : (r>0.25 ? 'var(--sun)' : 'var(--coral)');
+  timerEl.style.color = disp<=5 ? 'var(--coral)' : 'var(--grape)';
+  if(remaining<=0){ finish(); return; }
   state.raf=requestAnimationFrame(loopTimer);
 }
 const ANSCOLORS=['grape','coral','mint','sky'];
 function showQuestion(){
-  const q=state.qs[state.idx];
+  if(state.ended) return;
+  state.locked=false;
+  const q=makeQuestion(state.difficulty); state.cur=q;
   document.getElementById('qText').textContent=q.a+' + '+q.b;
-  document.getElementById('progBar').style.width=(state.idx/state.n*100)+'%';
   const g=document.getElementById('ansGrid'); g.innerHTML='';
   q.choices.forEach((c,i)=>{
     const b=document.createElement('button'); b.className='ans '+ANSCOLORS[i%4]; b.textContent=c;
@@ -402,81 +464,128 @@ function showQuestion(){
   });
 }
 function pick(btn,val,ans){
-  if(btn.classList.contains('dead')) return;
+  if(state.ended || state.locked || btn.classList.contains('dead')) return;
   if(val===ans){
+    state.locked=true;               // 정답 후 잠금 (연타로 -초 먹는 버그 방지)
     sndCorrect(); btn.classList.add('win');
-    setTimeout(()=>{
-      state.idx++;
-      if(state.idx>=state.n){ finish(); } else { showQuestion(); }
-    },260);
+    state.score++;
+    document.getElementById('scoreVal').textContent=state.score;
+    setTimeout(()=>showQuestion(),200);
   } else {
     sndWrong();
-    state.penalty += PENALTY;
+    state.penalty += PENALTY;         // 남은 시간 3초 차감
     btn.classList.add('dead');
     const card=document.querySelector('#s-game .card'); card.classList.add('shake');
     setTimeout(()=>card.classList.remove('shake'),300);
-    const p=document.createElement('div'); p.className='penalty'; p.textContent='+'+PENALTY+'초';
-    document.body.appendChild(p); setTimeout(()=>p.remove(),800);
+    const fp=document.createElement('div'); fp.className='penalty'; fp.textContent='-'+PENALTY+'초';
+    document.body.appendChild(fp); setTimeout(()=>fp.remove(),800);
   }
 }
 async function finish(){
+  if(state.ended) return;
+  state.ended=true;
   cancelAnimationFrame(state.raf);
   stopMusic();
-  document.getElementById('progBar').style.width='100%';
-  const total=(performance.now()-state.start)/1000 + state.penalty;
+  document.getElementById('progBar').style.width='0%';
+  const score=state.score;
   const p=state.profile;
   const rec = await sGet(RECKEY(p.id)) || { best:{}, history:[] };
-  const prevBest = rec.best[state.n];
-  const isRecord = prevBest==null || total<prevBest;
-  if(isRecord) rec.best[state.n]=total;
-  rec.history.unshift({ n:state.n, time:total, ts:Date.now() });
+  const prevBest = rec.best[state.limit];
+  const isRecord = prevBest==null || score>prevBest;
+  if(isRecord) rec.best[state.limit]=score;
+  rec.history.unshift({ limit:state.limit, score:score, ts:Date.now() });
   rec.history=rec.history.slice(0,20);
+  // 몬스터 스티커 (신기록 세울 때만 지급)
+  if(!rec.stickers) rec.stickers={};
+  if(!rec.shiny) rec.shiny={};
+  const TOTAL=8;
+  let earned=-1, wasNew=false, isShiny=false, goldNow=false;
+  if(isRecord){
+    const missing=[]; for(let i=0;i<TOTAL;i++){ if(!rec.stickers[i]) missing.push(i); }
+    earned = missing.length ? missing[rand(0,missing.length-1)] : rand(0,TOTAL-1);
+    wasNew = !rec.stickers[earned];
+    rec.stickers[earned]=(rec.stickers[earned]||0)+1;
+    isShiny = Math.random()<0.12;            // 반짝 레어 12%
+    if(isShiny) rec.shiny[earned]=true;
+    let allBase=true; for(let i=0;i<TOTAL;i++){ if(!rec.stickers[i]){ allBase=false; break; } }
+    if(allBase && !rec.golden){ rec.golden=true; goldNow=true; }   // 8마리 완성 → 황금 해금
+  }
   await sSet(RECKEY(p.id), rec);
-  const glog = await sGet('p99:log') || [];
-  glog.unshift({ id:p.id, name:p.name, char:p.char, n:state.n, time:total, ts:Date.now() });
-  await sSet('p99:log', glog.slice(0,100));
-  // render result
+  const glog = await sGet('p99s:log') || [];
+  glog.unshift({ id:p.id, name:p.name, char:p.char, limit:state.limit, score:score, ts:Date.now() });
+  await sSet('p99s:log', glog.slice(0,100));
   document.getElementById('resEmoji').innerHTML=charHTML(p.char,72);
-  document.getElementById('resTime').textContent=total.toFixed(1)+'초';
+  document.getElementById('resTime').textContent=score+'개';
   const banner=document.getElementById('recordBanner');
   const cmp=document.getElementById('resCompare');
   if(isRecord){
     banner.innerHTML='<div class="record-banner">🏆 새 기록!</div>';
-    cmp.textContent = prevBest==null ? state.n+'문제 첫 도전 완료!' : '지난 최고 '+prevBest.toFixed(1)+'초 → 오늘 '+total.toFixed(1)+'초';
+    cmp.textContent = prevBest==null ? state.limit+'초에 '+score+'개! 첫 도전!' : '지난 최고 '+prevBest+'개 → 오늘 '+score+'개!';
     sndRecord(); confetti();
   } else {
     banner.innerHTML='';
-    const diff=(total-prevBest).toFixed(1);
-    cmp.textContent='최고 기록 '+prevBest.toFixed(1)+'초 · '+diff+'초 더 걸렸어. 다시 도전!';
+    cmp.textContent='최고 기록 '+prevBest+'개 · 오늘 '+score+'개. 다시 도전!';
     sndFinish();
+  }
+  const sr=document.getElementById('stickerReward');
+  if(!isRecord){ sr.innerHTML=''; }
+  else if(goldNow){
+    sr.innerHTML='<div class="sticker-reward gold">'+goldMonster(76)+'<div class="sr-txt">👑 황금 몬스터 해금!!</div></div>';
+  } else {
+    const mon = isShiny ? '<span class="shiny">'+monster(earned,66)+'<span class="spark">✨</span></span>' : monster(earned,66);
+    const txt = isShiny ? '✨ 반짝 몬스터 획득!!' : (wasNew ? '🎉 새 몬스터 획득!' : '몬스터를 또 만났어!');
+    sr.innerHTML='<div class="sticker-reward">'+mon+'<div class="sr-txt">'+txt+'</div></div>';
   }
   go('result');
 }
 
 /* ---------- records ---------- */
-let rankN=10;
+let rankN=40;
 let _cache={profs:[],recs:{},log:[]};
 async function renderRecords(){
   const profs=state.profiles;
   const recs={};
   for(const p of profs){ recs[p.id]=await sGet(RECKEY(p.id)) || {best:{},history:[]}; }
-  const log=await sGet('p99:log') || [];
+  const log=await sGet('p99s:log') || [];
   _cache={profs,recs,log};
-  renderRank(); renderBest(); renderLog();
+  renderRank(); renderBest(); renderLog(); renderDex();
   go('records');
+}
+function renderDex(){
+  const {profs,recs}=_cache;
+  const box=document.getElementById('dexBox');
+  if(profs.length===0){ box.innerHTML='<p class="sub">아직 모은 몬스터가 없어요</p>'; return; }
+  box.innerHTML=profs.map(p=>{
+    const r=recs[p.id]||{};
+    const st=r.stickers||{}, shiny=r.shiny||{};
+    let have=0; for(let i=0;i<8;i++){ if(st[i]) have++; }
+    const slots=[];
+    for(let i=0;i<8;i++){
+      if(st[i]){
+        const spark = shiny[i] ? '<span class="spark">✨</span>' : '';
+        slots.push('<div class="dex-cell'+(shiny[i]?' shiny':'')+'">'+monster(i,42)+spark+(st[i]>1?'<span class="dex-n">'+st[i]+'</span>':'')+'</div>');
+      } else slots.push('<div class="dex-cell locked">'+monster(i,42)+'</div>');
+    }
+    slots.push(r.golden
+      ? '<div class="dex-cell gold shiny">'+goldMonster(42)+'<span class="spark">👑</span></div>'
+      : '<div class="dex-cell locked">'+goldMonster(42)+'</div>');
+    return '<div class="rec-card"><div class="rec-head"><span class="e">'+charHTML(p.char,32)+'</span><span>'+p.name+'</span>'
+      +'<span style="margin-left:auto; font-size:15px; color:#9a92b5;">'+have+'/8'+(r.golden?' 👑':'')+'</span></div>'
+      +'<div class="dex-grid">'+slots.join('')+'</div></div>';
+  }).join('');
 }
 function setRank(n){ rankN=n; renderRank(); }
 function renderRank(){
   const {profs,recs}=_cache;
   document.querySelectorAll('#rankSeg button').forEach(b=>b.classList.toggle('on', Number(b.dataset.n)===rankN));
   const arr=profs.map(p=>({p, t:(recs[p.id]&&recs[p.id].best)?recs[p.id].best[rankN]:null}))
-    .filter(x=>x.t!=null).sort((a,b)=>a.t-b.t).slice(0,3);
+    .filter(x=>x.t!=null).sort((a,b)=>b.t-a.t).slice(0,3);
   const box=document.getElementById('rankBox');
-  if(arr.length===0){ box.innerHTML='<p class="sub">아직 '+rankN+'문제 기록이 없어요</p>'; return; }
+  if(arr.length===0){ box.innerHTML='<p class="sub">아직 '+rankN+'초 기록이 없어요</p>'; return; }
   box.innerHTML=arr.map((x,i)=>'<div class="rank-row"><div class="rank-badge rank-'+(i+1)+'">'+(i+1)+'</div>'
     +'<span style="line-height:0">'+charHTML(x.p.char,30)+'</span>'
     +'<span class="rank-name">'+x.p.name+'</span>'
-    +'<span class="rank-time">'+x.t.toFixed(1)+'초</span></div>').join('');
+    +'<span class="rank-time">'+x.t+'개</span></div>').join('');
 }
 function renderBest(){
   const {profs,recs}=_cache;
@@ -484,12 +593,12 @@ function renderBest(){
   if(profs.length===0){ box.innerHTML='<p class="sub">아직 기록이 없어요</p>'; return; }
   box.innerHTML=profs.map(p=>{
     const r=recs[p.id]||{best:{}};
-    const fmt=n=> r.best[n]!=null ? r.best[n].toFixed(1)+'초' : '—';
+    const fmt=n=> r.best[n]!=null ? r.best[n]+'개' : '—';
     return '<div class="rec-card"><div class="rec-head"><span class="e">'+charHTML(p.char,34)+'</span><span>'+p.name+'</span></div>'
       +'<div class="chips">'
-      +'<div class="chip"><div class="cl">5문제</div><div class="cv">'+fmt(5)+'</div></div>'
-      +'<div class="chip"><div class="cl">10문제</div><div class="cv">'+fmt(10)+'</div></div>'
-      +'<div class="chip"><div class="cl">20문제</div><div class="cv">'+fmt(20)+'</div></div>'
+      +'<div class="chip"><div class="cl">20초</div><div class="cv">'+fmt(20)+'</div></div>'
+      +'<div class="chip"><div class="cl">40초</div><div class="cv">'+fmt(40)+'</div></div>'
+      +'<div class="chip"><div class="cl">60초</div><div class="cv">'+fmt(60)+'</div></div>'
       +'</div></div>';
   }).join('');
 }
@@ -500,7 +609,7 @@ function renderLog(){
   box.innerHTML=log.slice(0,40).map(e=>'<div class="log-row">'
     +'<span style="line-height:0">'+charHTML(e.char,26)+'</span>'
     +'<span class="ln">'+e.name+'</span>'
-    +'<span class="lt">'+e.n+'문제 · '+e.time.toFixed(1)+'초</span>'
+    +'<span class="lt">'+e.limit+'초 · '+e.score+'개</span>'
     +'<span class="ld">'+fmtDate(e.ts)+'</span></div>').join('');
 }
 function fmtDate(ts){
