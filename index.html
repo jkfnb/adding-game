@@ -169,10 +169,8 @@
         <button data-d="2" onclick="setDiff(2)">보통<br><span style="font-size:12px;">섞기</span></button>
         <button data-d="3" onclick="setDiff(3)">어려움<br><span style="font-size:12px;">두자리</span></button>
       </div>
-      <h2>몇 초 동안 풀까?</h2>
-      <button class="btn mint" onclick="startGame(20)">20초 <span style="font-size:16px;">· 짧게</span></button>
-      <button class="btn sky" onclick="startGame(40)">40초 <span style="font-size:16px;">· 보통</span></button>
-      <button class="btn grape" onclick="startGame(60)">60초 <span style="font-size:16px;">· 길게</span></button>
+      <h2>준비됐으면 시작!</h2>
+      <button class="btn grape" onclick="startGame(30)" style="font-size:24px; padding:22px;">30초 시작! 🚀</button>
       <button class="btn ghost" onclick="go('profile')">← 뒤로</button>
     </div>
   </div>
@@ -193,7 +191,7 @@
     <div class="card">
       <div class="hud">
         <div class="who" id="gameWho"></div>
-        <div class="timer" id="timer">20초</div>
+        <div class="timer" id="timer">30초</div>
       </div>
       <div class="progress"><div id="progBar"></div></div>
       <div id="scoreLine" style="text-align:center; font-size:22px; margin:-4px 0 14px; color:var(--grape);">⭐ <span id="scoreVal">0</span>개</div>
@@ -224,12 +222,7 @@
   <div class="screen" id="s-records">
     <div class="card">
       <h2>기록</h2>
-      <div class="sec-h">🏆 랭킹</div>
-      <div class="seg" id="rankSeg">
-        <button data-n="20" onclick="setRank(20)">20초</button>
-        <button data-n="40" class="on" onclick="setRank(40)">40초</button>
-        <button data-n="60" onclick="setRank(60)">60초</button>
-      </div>
+      <div class="sec-h">🏆 랭킹 <span style="font-size:14px; color:#9a92b5;">(30초)</span></div>
       <div id="rankBox"></div>
       <div class="sec-h">⭐ 각자 최고 기록</div>
       <div id="bestBox"></div>
@@ -278,6 +271,7 @@ function goldMonster(size){
     +'</svg>';
 }
 const PENALTY = 3; // 틀리면 -3초
+const MAX_PROFILES = 4; // 프로필 최대 인원
 let state = { profiles:[], profile:null, pickChar:0, limit:40, difficulty:2, locked:false, score:0, cur:null, penalty:0, start:0, raf:0, ended:false, muted:false };
 
 /* ---------- storage (persists across sessions; falls back to memory) ---------- */
@@ -316,10 +310,17 @@ function renderProfiles(){
     d.onclick=()=>{ state.profile=p; go('setup'); };
     g.appendChild(d);
   });
-  const add=document.createElement('div'); add.className='prof add';
-  add.innerHTML='<div class="pe">＋</div><div class="pn">새 친구</div>';
-  add.onclick=()=>go('create');
-  g.appendChild(add);
+  if(state.profiles.length < MAX_PROFILES){
+    const add=document.createElement('div'); add.className='prof add';
+    add.innerHTML='<div class="pe">＋</div><div class="pn">새 친구</div>';
+    add.onclick=()=>go('create');
+    g.appendChild(add);
+  } else {
+    const note=document.createElement('p'); note.className='sub';
+    note.style.gridColumn='1 / -1'; note.style.marginTop='6px';
+    note.textContent='친구는 '+MAX_PROFILES+'명까지 만들 수 있어요';
+    g.appendChild(note);
+  }
 }
 async function delProfile(id){
   if(!confirm('이 친구를 지울까요?')) return;
@@ -351,6 +352,7 @@ function checkName(){
 async function createProfile(){
   const name=document.getElementById('nameInput').value.trim();
   if(!name) return;
+  if(state.profiles.length>=MAX_PROFILES){ go('profile'); return; }
   const p={ id:'k'+Date.now(), name, char:state.pickChar };
   state.profiles.push(p);
   await sSet('p99:profiles', state.profiles);
@@ -540,7 +542,7 @@ async function finish(){
 }
 
 /* ---------- records ---------- */
-let rankN=40;
+let rankN=30;
 let _cache={profs:[],recs:{},log:[]};
 async function renderRecords(){
   const profs=state.profiles;
@@ -595,10 +597,8 @@ function renderBest(){
     const r=recs[p.id]||{best:{}};
     const fmt=n=> r.best[n]!=null ? r.best[n]+'개' : '—';
     return '<div class="rec-card"><div class="rec-head"><span class="e">'+charHTML(p.char,34)+'</span><span>'+p.name+'</span></div>'
-      +'<div class="chips">'
-      +'<div class="chip"><div class="cl">20초</div><div class="cv">'+fmt(20)+'</div></div>'
-      +'<div class="chip"><div class="cl">40초</div><div class="cv">'+fmt(40)+'</div></div>'
-      +'<div class="chip"><div class="cl">60초</div><div class="cv">'+fmt(60)+'</div></div>'
+      +'<div class="chips" style="grid-template-columns:1fr;">'
+      +'<div class="chip"><div class="cl">30초 최고</div><div class="cv">'+fmt(30)+'</div></div>'
       +'</div></div>';
   }).join('');
 }
