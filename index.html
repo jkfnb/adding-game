@@ -121,6 +121,14 @@
   .sticker-reward .shiny{ animation:shinyGlow 1s ease-in-out infinite; }
   .sticker-reward.gold .sr-txt{ color:#E08A00; }
   @keyframes shinyGlow{ 0%,100%{ filter:drop-shadow(0 0 4px rgba(255,200,0,.7)); } 50%{ filter:drop-shadow(0 0 11px rgba(255,210,0,1)); } }
+  .crown-reward{ margin:12px 0 4px; font-size:52px; animation:cdPop .5s ease; }
+  .crown-reward .cr-txt{ font-size:20px; color:#E08A00; margin-top:2px; }
+  .champ-row{ display:flex; align-items:center; gap:10px; background:#FFF7E0; border-radius:16px; padding:9px 12px; margin-bottom:8px; }
+  .champ-crown{ font-size:20px; }
+  .champ-lvl{ font-size:15px; color:#9a7b2e; min-width:44px; }
+  .champ-who{ display:flex; align-items:center; gap:6px; font-size:17px; }
+  .champ-score{ color:var(--grape); }
+  .pcrown{ position:absolute; top:4px; left:6px; font-size:15px; }
 </style>
 
 <div id="app">
@@ -212,6 +220,7 @@
       <div class="time-big" id="resTime">0개</div>
       <div class="compare" id="resCompare"></div>
       <div id="stickerReward"></div>
+      <div id="crownReward"></div>
       <button class="btn grape" onclick="go('setup')">다시 하기</button>
       <button class="btn ghost" onclick="renderRecords()">기록 보기</button>
       <button class="btn ghost" onclick="go('home')">홈으로</button>
@@ -222,8 +231,8 @@
   <div class="screen" id="s-records">
     <div class="card">
       <h2>기록</h2>
-      <div class="sec-h">🏆 랭킹 <span style="font-size:14px; color:#9a92b5;">(30초)</span></div>
-      <div id="rankBox"></div>
+      <div class="sec-h">👑 챔피언</div>
+      <div id="champBox"></div>
       <div class="sec-h">⭐ 각자 최고 기록</div>
       <div id="bestBox"></div>
       <div class="sec-h">📜 지나온 기록</div>
@@ -301,12 +310,19 @@ function go(id){
 }
 
 /* ---------- profiles ---------- */
-function renderProfiles(){
+async function renderProfiles(){
   const g = document.getElementById('profGrid');
   g.innerHTML='';
+  // 난이도별 챔피언 계산
+  const recs={}; for(const p of state.profiles){ recs[p.id]=await sGet(RECKEY(p.id)); }
+  const crownCount={};
+  if(state.profiles.length>=2){
+    [1,2,3].forEach(d=>{ let top=-1,id=null; state.profiles.forEach(p=>{ const b=recs[p.id]&&recs[p.id].best?recs[p.id].best[d]:null; if(b!=null&&b>top){top=b;id=p.id;} }); if(id) crownCount[id]=(crownCount[id]||0)+1; });
+  }
   state.profiles.forEach(p=>{
+    const crowns = crownCount[p.id] ? '<div class="pcrown">👑'+(crownCount[p.id]>1?' ×'+crownCount[p.id]:'')+'</div>' : '';
     const d=document.createElement('div'); d.className='prof';
-    d.innerHTML='<div class="del" onclick="event.stopPropagation();delProfile(\''+p.id+'\')">✕</div><div class="pe">'+charHTML(p.char,48)+'</div><div class="pn">'+p.name+'</div>';
+    d.innerHTML='<div class="del" onclick="event.stopPropagation();delProfile(\''+p.id+'\')">✕</div>'+crowns+'<div class="pe">'+charHTML(p.char,48)+'</div><div class="pn">'+p.name+'</div>';
     d.onclick=()=>{ state.profile=p; go('setup'); };
     g.appendChild(d);
   });
@@ -492,10 +508,10 @@ async function finish(){
   const score=state.score;
   const p=state.profile;
   const rec = await sGet(RECKEY(p.id)) || { best:{}, history:[] };
-  const prevBest = rec.best[state.limit];
+  const prevBest = rec.best[state.difficulty];
   const isRecord = prevBest==null || score>prevBest;
-  if(isRecord) rec.best[state.limit]=score;
-  rec.history.unshift({ limit:state.limit, score:score, ts:Date.now() });
+  if(isRecord) rec.best[state.difficulty]=score;
+  rec.history.unshift({ limit:state.limit, score:score, diff:state.difficulty, ts:Date.now() });
   rec.history=rec.history.slice(0,20);
   // 몬스터 스티커 (신기록 세울 때만 지급)
   if(!rec.stickers) rec.stickers={};
@@ -516,6 +532,17 @@ async function finish(){
   const glog = await sGet('p99s:log') || [];
   glog.unshift({ id:p.id, name:p.name, char:p.char, limit:state.limit, score:score, ts:Date.now() });
   await sSet('p99s:log', glog.slice(0,100));
+  // 왕관: 이 난이도의 챔피언인지 확인 (같은 폰의 프로필끼리)
+  let amChamp=false;
+  const diffName=({1:'쉬움',2:'보통',3:'어려움'})[state.difficulty]||'';
+  { let top=-1, topId=null;
+    for(const pr of state.profiles){
+      const rr = (pr.id===p.id) ? rec : await sGet(RECKEY(pr.id));
+      const b = (rr&&rr.best)? rr.best[state.difficulty] : null;
+      if(b!=null && b>top){ top=b; topId=pr.id; }
+    }
+    amChamp = (topId===p.id && rec.best[state.difficulty]!=null && state.profiles.length>=2);
+  }
   document.getElementById('resEmoji').innerHTML=charHTML(p.char,72);
   document.getElementById('resTime').textContent=score+'개';
   const banner=document.getElementById('recordBanner');
@@ -538,6 +565,8 @@ async function finish(){
     const txt = isShiny ? '✨ 반짝 몬스터 획득!!' : (wasNew ? '🎉 새 몬스터 획득!' : '몬스터를 또 만났어!');
     sr.innerHTML='<div class="sticker-reward">'+mon+'<div class="sr-txt">'+txt+'</div></div>';
   }
+  document.getElementById('crownReward').innerHTML = amChamp
+    ? '<div class="crown-reward">👑<div class="cr-txt">'+diffName+' 챔피언!</div></div>' : '';
   go('result');
 }
 
@@ -550,7 +579,7 @@ async function renderRecords(){
   for(const p of profs){ recs[p.id]=await sGet(RECKEY(p.id)) || {best:{},history:[]}; }
   const log=await sGet('p99s:log') || [];
   _cache={profs,recs,log};
-  renderRank(); renderBest(); renderLog(); renderDex();
+  renderChamp(); renderBest(); renderLog(); renderDex();
   go('records');
 }
 function renderDex(){
@@ -576,18 +605,19 @@ function renderDex(){
       +'<div class="dex-grid">'+slots.join('')+'</div></div>';
   }).join('');
 }
-function setRank(n){ rankN=n; renderRank(); }
-function renderRank(){
+function renderChamp(){
   const {profs,recs}=_cache;
-  document.querySelectorAll('#rankSeg button').forEach(b=>b.classList.toggle('on', Number(b.dataset.n)===rankN));
-  const arr=profs.map(p=>({p, t:(recs[p.id]&&recs[p.id].best)?recs[p.id].best[rankN]:null}))
-    .filter(x=>x.t!=null).sort((a,b)=>b.t-a.t).slice(0,3);
-  const box=document.getElementById('rankBox');
-  if(arr.length===0){ box.innerHTML='<p class="sub">아직 '+rankN+'초 기록이 없어요</p>'; return; }
-  box.innerHTML=arr.map((x,i)=>'<div class="rank-row"><div class="rank-badge rank-'+(i+1)+'">'+(i+1)+'</div>'
-    +'<span style="line-height:0">'+charHTML(x.p.char,30)+'</span>'
-    +'<span class="rank-name">'+x.p.name+'</span>'
-    +'<span class="rank-time">'+x.t+'개</span></div>').join('');
+  const box=document.getElementById('champBox');
+  const names={1:'쉬움',2:'보통',3:'어려움'};
+  const rows=[1,2,3].map(d=>{
+    let top=-1, who=null;
+    profs.forEach(p=>{ const b=(recs[p.id]&&recs[p.id].best)?recs[p.id].best[d]:null; if(b!=null && b>top){ top=b; who=p; } });
+    const holder = who
+      ? '<span style="line-height:0">'+charHTML(who.char,26)+'</span> <b>'+who.name+'</b> <span class="champ-score">'+top+'개</span>'
+      : '<span class="sub" style="font-size:15px;">아직 없음</span>';
+    return '<div class="champ-row"><span class="champ-crown">👑</span><span class="champ-lvl">'+names[d]+'</span><span class="champ-who">'+holder+'</span></div>';
+  }).join('');
+  box.innerHTML=rows;
 }
 function renderBest(){
   const {profs,recs}=_cache;
@@ -595,10 +625,12 @@ function renderBest(){
   if(profs.length===0){ box.innerHTML='<p class="sub">아직 기록이 없어요</p>'; return; }
   box.innerHTML=profs.map(p=>{
     const r=recs[p.id]||{best:{}};
-    const fmt=n=> r.best[n]!=null ? r.best[n]+'개' : '—';
+    const fmt=d=> r.best[d]!=null ? r.best[d]+'개' : '—';
     return '<div class="rec-card"><div class="rec-head"><span class="e">'+charHTML(p.char,34)+'</span><span>'+p.name+'</span></div>'
-      +'<div class="chips" style="grid-template-columns:1fr;">'
-      +'<div class="chip"><div class="cl">30초 최고</div><div class="cv">'+fmt(30)+'</div></div>'
+      +'<div class="chips">'
+      +'<div class="chip"><div class="cl">쉬움</div><div class="cv">'+fmt(1)+'</div></div>'
+      +'<div class="chip"><div class="cl">보통</div><div class="cv">'+fmt(2)+'</div></div>'
+      +'<div class="chip"><div class="cl">어려움</div><div class="cv">'+fmt(3)+'</div></div>'
       +'</div></div>';
   }).join('');
 }
