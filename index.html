@@ -202,7 +202,7 @@
         <div class="timer" id="timer">30초</div>
       </div>
       <div class="progress"><div id="progBar"></div></div>
-      <div id="scoreLine" style="text-align:center; font-size:22px; margin:-4px 0 14px; color:var(--grape);">⭐ <span id="scoreVal">0</span>개</div>
+      <div id="scoreLine" style="text-align:center; font-size:22px; margin:-4px 0 14px;">⭐ <span id="scoreVal" style="color:var(--grape);">0</span>개 &nbsp; <span style="color:var(--coral);">❌ <span id="wrongVal">0</span></span></div>
       <div class="qwrap">
         <div class="q" id="qText">3 + 5</div>
         <div class="qeq">= ?</div>
@@ -281,7 +281,7 @@ function goldMonster(size){
 }
 const PENALTY = 3; // 틀리면 -3초
 const MAX_PROFILES = 4; // 프로필 최대 인원
-let state = { profiles:[], profile:null, pickChar:0, limit:40, difficulty:2, locked:false, score:0, cur:null, penalty:0, start:0, raf:0, ended:false, muted:false };
+let state = { profiles:[], profile:null, pickChar:0, limit:40, difficulty:2, locked:false, score:0, wrong:0, cur:null, penalty:0, start:0, raf:0, ended:false, muted:false };
 
 /* ---------- storage (persists across sessions; falls back to memory) ---------- */
 const mem = {};
@@ -422,10 +422,11 @@ function startGame(sec){
 }
 function beginGame(){
   const p=state.profile;
-  state.score=0; state.penalty=0; state.ended=false;
+  state.score=0; state.wrong=0; state.penalty=0; state.ended=false;
   document.getElementById('gameWho').innerHTML='<span class="e">'+charHTML(p.char,32)+'</span><span>'+p.name+'</span>';
   document.getElementById('timer').textContent=state.limit.toFixed(1)+'초';
   document.getElementById('scoreVal').textContent='0';
+  document.getElementById('wrongVal').textContent='0';
   document.getElementById('qText').textContent='';
   document.getElementById('ansGrid').innerHTML='';
   document.getElementById('progBar').style.width='100%';
@@ -491,6 +492,8 @@ function pick(btn,val,ans){
     setTimeout(()=>showQuestion(),200);
   } else {
     sndWrong();
+    state.wrong++;
+    document.getElementById('wrongVal').textContent=state.wrong;
     state.penalty += PENALTY;         // 남은 시간 3초 차감
     btn.classList.add('dead');
     const card=document.querySelector('#s-game .card'); card.classList.add('shake');
@@ -513,12 +516,13 @@ async function finish(){
   if(isRecord) rec.best[state.difficulty]=score;
   rec.history.unshift({ limit:state.limit, score:score, diff:state.difficulty, ts:Date.now() });
   rec.history=rec.history.slice(0,20);
-  // 몬스터 스티커 (신기록 세울 때만 지급)
+  // 몬스터 스티커 (틀린 게 3개 미만일 때만 지급)
   if(!rec.stickers) rec.stickers={};
   if(!rec.shiny) rec.shiny={};
   const TOTAL=8;
+  const gotMonster = state.wrong < 3;
   let earned=-1, wasNew=false, isShiny=false, goldNow=false;
-  if(isRecord){
+  if(gotMonster){
     const missing=[]; for(let i=0;i<TOTAL;i++){ if(!rec.stickers[i]) missing.push(i); }
     earned = missing.length ? missing[rand(0,missing.length-1)] : rand(0,TOTAL-1);
     wasNew = !rec.stickers[earned];
@@ -557,7 +561,9 @@ async function finish(){
     sndFinish();
   }
   const sr=document.getElementById('stickerReward');
-  if(!isRecord){ sr.innerHTML=''; }
+  if(!gotMonster){
+    sr.innerHTML='<div class="sr-txt" style="color:#9a92b5; margin-top:10px;">앗, '+state.wrong+'개 틀렸어! 몬스터는 2개까지 틀렸을 때만 받아요</div>';
+  }
   else if(goldNow){
     sr.innerHTML='<div class="sticker-reward gold">'+goldMonster(76)+'<div class="sr-txt">👑 황금 몬스터 해금!!</div></div>';
   } else {
