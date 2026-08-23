@@ -284,6 +284,7 @@
         <p class="sub" id="battleEnemyDesc" style="margin-top:4px;"></p>
       </div>
       <button class="btn coral" id="battleStartBtn" style="font-size:24px; padding:20px;" onclick="beginBattle()">⚔️ 대결 시작!</button>
+      <button class="btn sky" onclick="openCoop()" style="font-size:20px;">👨‍👧 둘이 같이 잡기</button>
       <button class="btn ghost" onclick="go('profile')">← 뒤로</button>
     </div>
   </div>
@@ -327,6 +328,38 @@
     </div>
   </div>
 
+  <!-- COOP BOSS -->
+  <div class="screen" id="s-coop">
+    <div class="card">
+      <div class="stage-pill" id="coopStatus" style="text-align:center;">함께 잡는 보스</div>
+      <div style="text-align:center; margin:6px 0 10px;">
+        <div class="boss-aura" id="coopBossMon" style="display:inline-block;"></div>
+        <div class="fname" style="margin-top:4px;">거대 황금 대장</div>
+      </div>
+      <div class="hpwrap" style="height:22px;"><div class="hp-fill" id="coopHp" style="background:linear-gradient(90deg,#FF6B6B,#FFB020);"></div></div>
+      <div id="coopHpTxt" style="text-align:center; font-size:15px; margin:6px 0 2px; font-weight:700; color:var(--coral);"></div>
+      <div id="coopContrib" style="text-align:center; font-size:13px; color:#9a92b5; margin-bottom:10px; min-height:16px;"></div>
+      <div class="qwrap">
+        <div class="q" id="coopQ">3 + 5</div>
+        <div class="qeq">= ?</div>
+      </div>
+      <div class="ans-grid" id="coopAns"></div>
+      <button class="btn ghost" onclick="leaveCoop()" style="margin-top:14px;">← 그만하기</button>
+    </div>
+  </div>
+
+  <!-- COOP RESULT -->
+  <div class="screen" id="s-coop-result">
+    <div class="card" style="text-align:center;">
+      <h2>🎉 같이 잡았다!</h2>
+      <div class="cap-reveal" id="coopReveal"></div>
+      <p class="sub" id="coopWinMsg">힘을 합쳐서 거대 보스를 물리쳤어요!</p>
+      <div id="coopContribFinal" style="margin:12px 0; font-size:15px;"></div>
+      <button class="btn coral" onclick="resetCoopBoss()">🔁 새 보스 소환</button>
+      <button class="btn ghost" onclick="go('home')">🏠 홈으로</button>
+    </div>
+  </div>
+
 </div>
 
 <script>
@@ -365,7 +398,7 @@ function goldMonster(size){
 }
 const PENALTY = 3; // 틀리면 -3초
 const MAX_PROFILES = 4; // 프로필 최대 인원
-let state = { profiles:[], profile:null, pickChar:0, limit:40, difficulty:2, locked:false, score:0, wrong:0, cur:null, penalty:0, start:0, raf:0, ended:false, muted:false, mode:'time', battle:null };
+let state = { profiles:[], profile:null, pickChar:0, limit:40, difficulty:2, locked:false, score:0, wrong:0, cur:null, penalty:0, start:0, raf:0, ended:false, muted:false, mode:'time', battle:null, coop:null };
 
 /* ---------- storage (persists across sessions; falls back to memory) ---------- */
 const mem = {};
@@ -1000,6 +1033,146 @@ function battleLose(){
     '<button class="btn coral" onclick="beginBattle()">↻ 다시 대결</button>'+
     '<button class="btn ghost" onclick="go(\'home\')">🏠 홈으로</button>';
   go('battle-result');
+}
+
+/* ---------- 협동 보스 (두 폰이 같은 보스 함께 잡기) ---------- */
+const COOP_ROOM = 'swhw';        // 서우·현우 공용 방
+const COOP_HP = 60;              // 오래 메다가는 큰 보스
+
+async function fetchBoss(){
+  try{
+    const r = await fetch(SERVER_URL + '?action=boss&room=' + encodeURIComponent(COOP_ROOM));
+    const d = await r.json();
+    return (d && d.ok) ? d.boss : null;
+  }catch(e){ return null; }
+}
+function postBoss(payload){
+  payload.room = COOP_ROOM;
+  try{
+    fetch(SERVER_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(payload) });
+  }catch(e){}   // 응답은 안 읽음 — 상태는 폴링(GET)으로만 갱신
+}
+
+async function openCoop(){
+  go('coop');
+  document.getElementById('coopStatus').textContent = '보스 확인 중…';
+  document.getElementById('coopAns').innerHTML = '';
+  document.getElementById('coopQ').textContent = '';
+  document.getElementById('coopContrib').textContent = '';
+  let boss = await fetchBoss();
+  if(boss==null){
+    document.getElementById('coopStatus').textContent = '서버에 연결할 수 없어요 😢';
+    document.getElementById('coopContrib').textContent = '잠시 후 다시 시도하거나, 인터넷을 확인해주세요.';
+    return;
+  }
+  if(!boss.max || boss.hp<=0){           // 보스가 없거나 이미 잡혔으면 새로 소환
+    postBoss({ action:'boss_reset', hp:COOP_HP });
+    boss = { hp:COOP_HP, max:COOP_HP, hits:{} };
+  }
+  startCoop(boss);
+}
+
+function startCoop(boss){
+  state.coop = { boss:boss, locked:false, cur:null, qStart:0, timer:0, done:false };
+  document.getElementById('coopBossMon').innerHTML = goldMonster(96);
+  document.getElementById('coopStatus').textContent = '💪 힘을 합쳐 보스를 잡자!';
+  updateCoopBar();
+  coopQuestion();
+  if(state.coop.timer) clearInterval(state.coop.timer);
+  state.coop.timer = setInterval(coopPoll, 2500);   // 2.5초마다 공유 HP 갱신
+}
+
+async function coopPoll(){
+  if(!state.coop || state.coop.done) return;
+  const boss = await fetchBoss();
+  if(boss==null) return;
+  state.coop.boss.hp = boss.hp;                       // 서버가 진짜 HP의 기준
+  state.coop.boss.max = boss.max || state.coop.boss.max;
+  state.coop.boss.hits = boss.hits || {};
+  updateCoopBar();
+  if(boss.hp<=0){ coopWin(); }
+}
+
+function coopDiff(){
+  const b = state.coop.boss;
+  const r = b.hp / (b.max||COOP_HP);
+  if(r > 0.66) return 1;      // 처음엔 쉬움
+  if(r > 0.33) return 2;      // 중간엔 보통
+  return 3;                   // 막판엔 어려움 (발악)
+}
+
+function updateCoopBar(){
+  const b = state.coop.boss;
+  const pct = Math.max(0, Math.min(100, b.hp / (b.max||COOP_HP) * 100));
+  document.getElementById('coopHp').style.width = pct + '%';
+  document.getElementById('coopHpTxt').textContent = '남은 보스 HP  ' + Math.max(0,b.hp) + ' / ' + (b.max||COOP_HP);
+  const hits = b.hits || {};
+  const names = Object.keys(hits);
+  document.getElementById('coopContrib').textContent =
+    names.length ? names.map(n=> n+' '+hits[n]).join('   ·   ') : '';
+}
+
+function coopQuestion(){
+  if(!state.coop || state.coop.done) return;
+  state.coop.locked = false;
+  const q = makeQuestion(coopDiff());
+  state.coop.cur = q;
+  state.coop.qStart = performance.now();
+  document.getElementById('coopQ').textContent = q.a + ' + ' + q.b;
+  const g = document.getElementById('coopAns'); g.innerHTML='';
+  q.choices.forEach((c,i)=>{
+    const btn=document.createElement('button');
+    btn.className='ans '+ANSCOLORS[i%4];
+    btn.textContent=c;
+    btn.onclick=()=>coopPick(btn,c,q.ans);
+    g.appendChild(btn);
+  });
+}
+
+function coopPick(btn,val,ans){
+  if(!state.coop || state.coop.locked || state.coop.done || btn.classList.contains('dead')) return;
+  if(val===ans){
+    state.coop.locked=true;
+    sndCorrect(); btn.classList.add('win');
+    const fast = (performance.now()-state.coop.qStart) < 2500;
+    const dmg = fast ? 2 : 1;
+    state.coop.boss.hp = Math.max(0, state.coop.boss.hp - dmg);   // 낙관적 로컬 반영
+    const me = state.profile ? state.profile.name : '나';
+    state.coop.boss.hits = state.coop.boss.hits || {};
+    state.coop.boss.hits[me] = (state.coop.boss.hits[me]||0) + dmg;
+    updateCoopBar();
+    postBoss({ action:'boss_hit', dmg:dmg, name:me });           // 서버로 전송
+    if(state.coop.boss.hp<=0){ coopWin(); return; }
+    setTimeout(coopQuestion, 220);
+  } else {
+    sndWrong();
+    btn.classList.add('dead');    // 오답은 데미지 없이 재시도 (아이 친화)
+  }
+}
+
+function coopWin(){
+  if(!state.coop || state.coop.done) return;
+  state.coop.done = true;
+  if(state.coop.timer){ clearInterval(state.coop.timer); state.coop.timer=0; }
+  stopMusic(); sndRecord(); confetti();
+  document.getElementById('coopReveal').innerHTML = goldMonster(96);
+  const hits = state.coop.boss.hits || {};
+  const names = Object.keys(hits);
+  document.getElementById('coopContribFinal').innerHTML =
+    names.length ? ('함께 준 데미지<br>' + names.map(n=> '<b>'+n+'</b> '+hits[n]).join('   ·   ')) : '';
+  go('coop-result');
+}
+
+async function resetCoopBoss(){
+  postBoss({ action:'boss_reset', hp:COOP_HP });
+  startCoop({ hp:COOP_HP, max:COOP_HP, hits:{} });
+}
+
+function leaveCoop(){
+  if(state.coop && state.coop.timer){ clearInterval(state.coop.timer); state.coop.timer=0; }
+  if(state.coop) state.coop.done = true;
+  stopMusic();
+  go('battle-map');
 }
 
 /* ---------- init ---------- */
