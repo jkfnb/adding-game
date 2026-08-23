@@ -261,6 +261,8 @@
       <h2>기록</h2>
       <div class="sec-h">👑 챔피언</div>
       <div id="champBox"></div>
+      <div class="sec-h">🌐 우리 랭킹 <span style="font-size:13px;color:#9a92b5;">(모든 폰 공유)</span></div>
+      <div id="rankBox"></div>
       <div class="sec-h">⭐ 각자 최고 기록</div>
       <div id="bestBox"></div>
       <div class="sec-h">📜 지나온 기록</div>
@@ -380,6 +382,27 @@ async function sSet(k,v){
   if(hasLS){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
 }
 const RECKEY = id => 'p99s:rec:'+id;
+
+/* ---------- shared ranking server (Google Apps Script) ---------- */
+const SERVER_URL = 'https://script.google.com/macros/s/AKfycbycfeh5DZk_NxL0WI9krMQittZ8l0aWiUYdXbvF1CPGVxoJ8Lj_ukUQWi-t40pWe4KwSg/exec';
+async function postScore(p, limit, score, diff){
+  if(!SERVER_URL) return;
+  try{
+    await fetch(SERVER_URL, {
+      method:'POST',
+      headers:{'Content-Type':'text/plain;charset=utf-8'},   // text/plain: CORS 프리플라이트 회피
+      body: JSON.stringify({ name:p.name, char:p.char, limit:limit, score:score, diff:diff })
+    });
+  }catch(e){ /* 오프라인이어도 게임엔 지장 없음 */ }
+}
+async function fetchRanking(){
+  if(!SERVER_URL) return null;
+  try{
+    const r = await fetch(SERVER_URL, { method:'GET' });
+    const d = await r.json();
+    return (d && d.ok) ? d.records : null;
+  }catch(e){ return null; }
+}
 
 /* ---------- navigation ---------- */
 function go(id){
@@ -615,6 +638,7 @@ async function finish(){
     if(allBase && !rec.golden){ rec.golden=true; goldNow=true; }   // 8마리 완성 → 황금 해금
   }
   await sSet(RECKEY(p.id), rec);
+  postScore(p, state.limit, score, state.difficulty);   // 공유 랭킹 서버로 전송 (비차단)
   const glog = await sGet('p99s:log') || [];
   glog.unshift({ id:p.id, name:p.name, char:p.char, limit:state.limit, score:score, ts:Date.now() });
   await sSet('p99s:log', glog.slice(0,100));
@@ -669,6 +693,32 @@ async function renderRecords(){
   _cache={profs,recs,log};
   renderChamp(); renderBest(); renderLog(); renderDex();
   go('records');
+  renderRanking();
+}
+
+function renderRanking(){
+  const box=document.getElementById('rankBox');
+  box.innerHTML='<p class="sub" style="font-size:15px;">불러오는 중…</p>';
+  fetchRanking().then(records=>{
+    if(records==null){ box.innerHTML='<p class="sub" style="font-size:15px;">지금은 랭킹을 불러올 수 없어요 (인터넷 확인)</p>'; return; }
+    if(records.length===0){ box.innerHTML='<p class="sub" style="font-size:15px;">아직 공유된 기록이 없어요. 게임을 한 판 해보세요!</p>'; return; }
+    const names={1:'쉬움',2:'보통',3:'어려움'};
+    const rows=[];
+    [1,2,3].forEach(d=>{
+      const list=records.filter(r=>Number(r.diff)===d).sort((a,b)=>b.score-a.score).slice(0,5);
+      if(list.length===0) return;
+      rows.push('<div class="sec-h" style="font-size:15px;margin:12px 0 6px;color:#9a92b5;">'+names[d]+'</div>');
+      list.forEach((r,i)=>{
+        const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':(i+1)+'.';
+        const mon = (typeof r.char==='number'||/^\d+$/.test(String(r.char))) ? charHTML(Number(r.char),26) : '';
+        rows.push('<div class="log-row"><span class="ln" style="min-width:26px">'+medal+'</span>'
+          +'<span style="line-height:0">'+mon+'</span>'
+          +'<span class="ln">'+String(r.name||'')+'</span>'
+          +'<span class="lt" style="margin-left:auto">'+r.score+'개</span></div>');
+      });
+    });
+    box.innerHTML = rows.join('') || '<p class="sub" style="font-size:15px;">아직 공유된 기록이 없어요.</p>';
+  });
 }
 function renderDex(){
   const {profs,recs}=_cache;
