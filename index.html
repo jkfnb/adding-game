@@ -284,6 +284,7 @@
         <p class="sub" id="battleEnemyDesc" style="margin-top:4px;"></p>
       </div>
       <button class="btn coral" id="battleStartBtn" style="font-size:24px; padding:20px;" onclick="beginBattle()">⚔️ 대결 시작!</button>
+      <button class="btn sun" id="battleRematchBtn" style="font-size:18px; display:none;" onclick="openRematch()">✨ 다시잡기 (반짝 헌터)</button>
       <button class="btn sky" onclick="openCoop()" style="font-size:20px;">👨‍👧 둘이 같이 잡기</button>
       <button class="btn ghost" onclick="go('profile')">← 뒤로</button>
     </div>
@@ -779,8 +780,9 @@ function renderDex(){
         slots.push('<div class="dex-cell'+(shiny[i]?' shiny':'')+'">'+monster(i,42)+spark+(st[i]>1?'<span class="dex-n">'+st[i]+'</span>':'')+'</div>');
       } else slots.push('<div class="dex-cell locked">'+monster(i,42)+'</div>');
     }
+    const bw = (r.battle && r.battle.bossWins) || 0;
     slots.push(r.golden
-      ? '<div class="dex-cell gold shiny">'+goldMonster(42)+'<span class="spark">👑</span></div>'
+      ? '<div class="dex-cell gold shiny">'+goldMonster(42)+'<span class="spark">👑</span>'+(bw>1?'<span class="dex-n">'+bw+'</span>':'')+'</div>'
       : '<div class="dex-cell locked">'+goldMonster(42)+'</div>');
     const coop = r.coop||{};
     slots.push(coop.got
@@ -927,30 +929,50 @@ async function openBattleMap(){
   const idx = done ? total-1 : cleared;      // 다 깼으면 보스 재도전
   const st = BATTLE_STAGES[idx];
   state.battle = { idx, cleared, replay:done };
-  document.getElementById('battleStagePill').textContent = done ? '모두 클리어! 다시 도전' : (idx+1)+' / '+total+' 상대';
+  const bossWins = (rec.battle && rec.battle.bossWins) || 0;
+  document.getElementById('battleStagePill').textContent = done ? '모두 클리어! 다시 도전 (보스 '+bossWins+'회 격파)' : (idx+1)+' / '+total+' 상대';
   document.getElementById('battleMapTitle').textContent = st.boss ? '👑 최종 보스!' : '다음 상대';
   const mon = st.boss ? goldMonster(96) : monster(st.mon,96);
   document.getElementById('battleEnemyMon').innerHTML = st.boss ? '<span class="boss-aura" style="display:inline-block">'+mon+'</span>' : mon;
   document.getElementById('battleEnemyName').textContent = st.name;
   const lv={1:'쉬움',2:'보통',3:'어려움'}[st.diff];
-  document.getElementById('battleEnemyDesc').textContent = '체력 '+st.hp+' · '+lv+' 문제'+(done?' · 이미 잡은 상대':'');
+  document.getElementById('battleEnemyDesc').textContent = '체력 '+st.hp+' · '+lv+' 문제'+(done?' · 이미 잡은 상대':'')+(st.boss?'':' · 빠르고 연속으로 맞히면 포획 확률 UP!');
   document.getElementById('battleStartBtn').textContent = st.boss ? '👑 보스 도전!' : '⚔️ 대결 시작!';
+  document.getElementById('battleRematchBtn').style.display = done ? 'block' : 'none';
   go('battle-map');
 }
 
 function beginBattle(){
-  const p=state.profile, st=BATTLE_STAGES[state.battle.idx];
+  const p=state.profile, st=state.battle.stageOverride || BATTLE_STAGES[state.battle.idx];
   state.battle.enemyMax=st.hp; state.battle.enemyHp=st.hp;
   state.battle.youHp=YOU_HP; state.battle.diff=st.diff;
   state.battle.combo=0; state.battle.locked=false; state.battle.stage=st;
   const emon = st.boss ? goldMonster(72) : monster(st.mon,72);
   document.getElementById('bEnemyMon').innerHTML = st.boss ? '<span class="boss-aura" style="display:inline-block">'+emon+'</span>' : emon;
-  document.getElementById('bEnemyName').textContent = st.name;
+  document.getElementById('bEnemyName').textContent = st.name + (st.rematch ? ' (강화)' : '');
   document.getElementById('bYouMon').innerHTML = charHTML(p.char,64);
   document.getElementById('bYouName').textContent = p.name;
   updateBattleBars();
   go('battle');
   countdown(()=>{ showBattleQuestion(); startMusic(); });
+}
+
+async function openRematch(){
+  const p=state.profile;
+  const rec = await sGet(RECKEY(p.id)) || {};
+  if(!rec.battle) rec.battle={cleared:0};
+  const ridx = rec.battle.rematchIdx || 0;
+  const base = BATTLE_STAGES[ridx];   // 0~7번 (보스 제외) 순환
+  const st = { mon:base.mon, hp:Math.round(base.hp*1.6), diff:3, name:base.name, rematch:true };
+  state.battle = { idx:ridx, rematch:true, stageOverride:st };
+  document.getElementById('battleStagePill').textContent = '✨ 다시잡기 '+(ridx+1)+' / 8';
+  document.getElementById('battleMapTitle').textContent = '반짝 헌팅!';
+  document.getElementById('battleEnemyMon').innerHTML = monster(st.mon,96);
+  document.getElementById('battleEnemyName').textContent = st.name+' (강화)';
+  document.getElementById('battleEnemyDesc').textContent = '체력 '+st.hp+' · 어려움 문제 · 빠르고 연속으로 맞히면 포획 확률 UP!';
+  document.getElementById('battleStartBtn').textContent = '✨ 반짝 도전!';
+  document.getElementById('battleRematchBtn').style.display='none';
+  go('battle-map');
 }
 
 function updateBattleBars(){
@@ -1006,24 +1028,68 @@ function battlePick(btn,val,ans){
 
 async function battleWin(){
   const b=state.battle, st=b.stage, p=state.profile;
-  stopMusic(); sndFinish(); confetti();
+  stopMusic();
   const rec = await sGet(RECKEY(p.id)) || { best:{}, history:[] };
   if(!rec.stickers) rec.stickers={};
   if(!rec.shiny) rec.shiny={};
   if(!rec.battle) rec.battle={cleared:0};
-  let capIdx=-1, isShiny=false, goldNow=false, wasNew=false;
-  if(st.boss){ if(!rec.golden){ rec.golden=true; goldNow=true; } }
-  else {
-    capIdx=st.mon; wasNew=!rec.stickers[capIdx];
-    rec.stickers[capIdx]=(rec.stickers[capIdx]||0)+1;
-    isShiny=Math.random()<0.12; if(isShiny) rec.shiny[capIdx]=true;
+  let capIdx=-1, isShiny=false, goldNow=false, wasNew=false, caught=true, alreadyShiny=false;
+  if(st.boss){
+    if(!rec.golden){ rec.golden=true; goldNow=true; }
+    rec.battle.bossWins = (rec.battle.bossWins||0)+1;
+  } else if(st.rematch){
+    const catchChance = Math.min(0.9, 0.4 + b.combo*0.15);   // 콤보(연속 빠른 정답)가 높을수록 포획 확률 UP
+    caught = Math.random() < catchChance;
+    if(caught){
+      capIdx=st.mon;
+      alreadyShiny = !!rec.shiny[capIdx];
+      wasNew = !alreadyShiny;
+      rec.stickers[capIdx]=(rec.stickers[capIdx]||0)+1;
+      rec.shiny[capIdx]=true; isShiny=true;
+      rec.battle.rematchIdx = (b.idx+1)%8;
+    }
+  } else {
+    const catchChance = Math.min(0.9, 0.4 + b.combo*0.15);   // 콤보(연속 빠른 정답)가 높을수록 포획 확률 UP
+    caught = Math.random() < catchChance;
+    if(caught){
+      capIdx=st.mon; wasNew=!rec.stickers[capIdx];
+      rec.stickers[capIdx]=(rec.stickers[capIdx]||0)+1;
+      isShiny=Math.random()<0.12; if(isShiny) rec.shiny[capIdx]=true;
+    }
   }
-  if(!b.replay && b.idx===rec.battle.cleared) rec.battle.cleared=b.idx+1;
+  if(caught && !st.rematch && !b.replay && b.idx===rec.battle.cleared) rec.battle.cleared=b.idx+1;
   await sSet(RECKEY(p.id), rec);
-  document.getElementById('brTitle').textContent = st.boss ? '👑 보스 격파!!' : '🎉 승리!';
+
+  if(!caught){
+    sndWrong();
+    document.getElementById('brTitle').textContent='아깝다! 놓쳤어요 💨';
+    document.getElementById('brReveal').innerHTML='<div class="cap-reveal">'+monster(st.mon,80)+'</div>';
+    document.getElementById('brMsg').textContent=st.name+'이(가) 도망갔어! 다시 도전해볼까?';
+    document.getElementById('brButtons').innerHTML=
+      '<button class="btn coral" onclick="beginBattle()">↻ 다시 대결</button>'+
+      '<button class="btn ghost" onclick="go(\'home\')">🏠 홈으로</button>';
+    go('battle-result');
+    return;
+  }
+
+  sndFinish(); confetti();
+
+  if(st.rematch){
+    document.getElementById('brTitle').textContent = '✨ 반짝 헌팅 성공!';
+    const m = '<span class="shiny">'+monster(capIdx,90)+'<span class="spark">✨</span></span>';
+    document.getElementById('brReveal').innerHTML = '<div class="sticker-reward">'+m+'</div>';
+    document.getElementById('brMsg').textContent = alreadyShiny ? st.name+' 반짝 버전을 또 잡았어!' : st.name+' 반짝 버전 처음 잡았다! 🌟';
+    document.getElementById('brButtons').innerHTML =
+      '<button class="btn coral" onclick="openRematch()">다음 몬스터 도전 →</button>'+
+      '<button class="btn ghost" onclick="go(\'home\')">🏠 홈으로</button>';
+    go('battle-result');
+    return;
+  }
+
+  document.getElementById('brTitle').textContent = st.boss ? '👑 보스 격파!!' : '🎉 승리! 포획 성공!';
   let reveal, msg;
   if(goldNow){ reveal='<div class="sticker-reward gold">'+goldMonster(90)+'<div class="sr-txt">황금 몬스터 획득!</div></div>'; msg='최종 보스를 물리쳤어! 대단해 🏆'; }
-  else if(st.boss){ reveal='<div class="sticker-reward gold">'+goldMonster(90)+'</div>'; msg='보스를 또 이겼어! 최고야'; }
+  else if(st.boss){ reveal='<div class="sticker-reward gold">'+goldMonster(90)+'</div>'; msg='보스를 또 이겼어! ('+rec.battle.bossWins+'번째 승리) 최고야'; }
   else {
     const m = isShiny ? '<span class="shiny">'+monster(capIdx,90)+'<span class="spark">✨</span></span>' : monster(capIdx,90);
     reveal='<div class="sticker-reward">'+m+'</div>';
